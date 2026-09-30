@@ -27,7 +27,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdbool.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,7 +42,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define LED_BLINK_PERIOD 250
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -59,17 +59,74 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#include "stdbool.h"
+#include "bsp.h"
+#define LED_BLINK_PERIOD 250
+
 static volatile bool sw1_pressed = false;
 static volatile bool sw2_pressed = false;
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-	switch (GPIO_Pin) {
-	case BTN_SW1_Pin:
-		sw1_pressed = true;
-		break;
-	case BTN_SW2_Pin:
-		sw2_pressed = true;
-		break;
+
+#define CCR_T0H 68
+#define CCR_T1H 136
+
+#define LED_NUMBER 1
+#define COLOR_NUMBER 3
+#define BITS_PER_COLOR 8
+
+#define NP_BUFFER_LENGHT (LED_NUMBER*COLOR_NUMBER*BITS_PER_COLOR+1)
+
+typedef struct color_struct { // Pour les LEDs RGB
+	uint8_t r;
+	uint8_t g;
+	uint8_t b;
+}color_t;
+
+static const color_t red ={.r=50,.g=0,.b=0};
+static const color_t green ={.r=0,.g=50,.b=0};
+static const color_t blue ={.r=0,.g=0,.b=50};
+
+uint8_t np_dma_buffer[NP_BUFFER_LENGHT];
+
+void color_to_buffer(color_t * color, uint8_t * buffer)
+{
+	for (int i=0;i<NP_BUFFER_LENGHT;i++)
+	{
+		buffer[i] = ((color->g >> (7-i) & 0x01)) ? CCR_T1H : CCR_T0H;
+	}
+
+	for (int i=0;i<NP_BUFFER_LENGHT;i++)
+	{
+		buffer[BITS_PER_COLOR+i] = ((color->r >> (7-i) & 0x01)) ? CCR_T1H : CCR_T0H;
+	}
+
+	for (int i=0;i<NP_BUFFER_LENGHT;i++)
+	{
+		buffer[2*BITS_PER_COLOR+i] = ((color->b >> (7-i) & 0x01)) ? CCR_T1H : CCR_T0H;
+	}
+
+	// Dernier bit à 0 pour forcer le 0V du neopixel
+	buffer[NP_BUFFER_LENGHT-1]=0;
+}
+
+static void hsv_to_rgb(int h, int s, int v, uint8_t *r, uint8_t *g, uint8_t *b) {
+	h = ((h % 360) + 360) % 360;
+	if (s <= 0) {
+		*r = *g = *b = (uint8_t)v;
+		return;
+	}
+	int region = h / 60;
+	int rem = h % 60;
+	int p = (v * (255 - s)) / 255;
+	int q = (v * (255 - (s * rem) / 60)) / 255;
+	int t = (v * (255 - (s * (60 - rem)) / 60)) / 255;
+	switch (region) {
+	case 0: *r = (uint8_t)v; *g = (uint8_t)t; *b = (uint8_t)p; break;
+	case 1: *r = (uint8_t)q; *g = (uint8_t)v; *b = (uint8_t)p; break;
+	case 2: *r = (uint8_t)p; *g = (uint8_t)v; *b = (uint8_t)t; break;
+	case 3: *r = (uint8_t)p; *g = (uint8_t)q; *b = (uint8_t)v; break;
+	case 4: *r = (uint8_t)t; *g = (uint8_t)p; *b = (uint8_t)v; break;
+	default: *r = (uint8_t)v; *g = (uint8_t)p; *b = (uint8_t)q; break;
 	}
 }
 /* USER CODE END 0 */
@@ -115,23 +172,11 @@ int main(void)
 
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
-	uint32_t last_tick = 0;
-	while (1) {
-		uint32_t tick = HAL_GetTick();
-		if (last_tick != tick) {
-			last_tick = tick;
-			if (0 == (tick % LED_BLINK_PERIOD)) {
-				HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-			}
-		}
-		if (sw1_pressed) {
-			sw1_pressed = false;
-			HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
-		}
-		if (sw2_pressed) {
-			sw2_pressed = false;
-			HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
-		}
+	while (1)
+	{
+
+		HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+		HAL_Delay(2000);
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -198,8 +243,25 @@ void Error_Handler(void)
 	/* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 	__disable_irq();
+
+	uint32_t last_tick = 0;
 	while (1)
 	{
+		uint32_t tick = HAL_GetTick();
+		if (last_tick != tick) {
+			last_tick = tick;
+			if (0 == (tick % LED_BLINK_PERIOD)) {
+				HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+			}
+		}
+		if (sw1_pressed) {
+			sw1_pressed = false;
+			HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+		}
+		if (sw2_pressed) {
+			sw2_pressed = false;
+			HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
+		}
 	}
 	/* USER CODE END Error_Handler_Debug */
 }

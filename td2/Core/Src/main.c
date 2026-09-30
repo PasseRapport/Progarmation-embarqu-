@@ -60,19 +60,12 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 #include "stdbool.h"
-
+#include "bsp.h"
 #define LED_BLINK_PERIOD 250
 
 static volatile bool sw1_pressed = false;
 static volatile bool sw2_pressed = false;
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-	switch (GPIO_Pin) {
-	case BTN_SW1_Pin:
-		sw1_pressed = true; break;
-	case BTN_SW2_Pin:
-		sw2_pressed = true; break;
-	}
-}
+
 
 #define CCR_T0H 68
 #define CCR_T1H 136
